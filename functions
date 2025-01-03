@@ -141,16 +141,16 @@ KSYSROOT_FULL_TRIPLE="${KSYSROOT_FULL_TRIPLE}"
 LLVM_DIR="${LLVM_DIR}"
 
 LLVM_CONFIG=\${LLVM_DIR}/llvm-config
-PKG_CONFIG=${KSYSROOT_PREFIX_ABS}/bin/\${KSYSROOT_FULL_TRIPLE}-pkg-config
+PKG_CONFIG=${KSYSROOT_PREFIX_ABS}/bin/${tool_prefix}-pkg-config
 PKG_CONFIG_FOR_BUILD=${PKG_CONFIG}/bin/pkg-config
 
-CC=${KSYSROOT_PREFIX_ABS}/bin/\${KSYSROOT_FULL_TRIPLE}-cc
+CC=${KSYSROOT_PREFIX_ABS}/bin/${tool_prefix}-cc
 CC_FOR_BUILD=\${LLVM_DIR}/clang
-CXX=${KSYSROOT_PREFIX_ABS}/bin/\${KSYSROOT_FULL_TRIPLE}-c++
+CXX=${KSYSROOT_PREFIX_ABS}/bin/${tool_prefix}-c++
 CXX_FOR_BUILD=\${LLVM_DIR}/clang++
-CPP=${KSYSROOT_PREFIX_ABS}/bin/\${KSYSROOT_FULL_TRIPLE}-cpp
+CPP=${KSYSROOT_PREFIX_ABS}/bin/${tool_prefix}-cpp
 CPP_FOR_BUILD=\${LLVM_DIR}/clang-cpp
-LD=${KSYSROOT_PREFIX_ABS}/bin/\${KSYSROOT_FULL_TRIPLE}-ld
+LD=${KSYSROOT_PREFIX_ABS}/bin/${tool_prefix}-ld
 LD_FOR_BUILD=${LLD_DIR}/${NATIVE_LINKER}
 
 AR=\${LLVM_DIR}/llvm-ar
@@ -293,40 +293,50 @@ EOF
 # create wrappers for legacy uses
 mk_wrappers() {
     mkdir -p "${KSYSROOT_PREFIX_ABS}"/bin
-    local sysroot_args=
-    local common_args=
-    local pkgconf_args=
+    local sysroot_args
+    local common_args
+    local pkgconf_args
+    local tool_prefix
 
-    if [ "${KSYSROOT_TRIPLE}" != "native" ]; then
+    if [ "${KSYSROOT_TRIPLE}" = "native" ]; then
+        sysroot_args=
+        common_args=
+        pkgconf_args=
+        tool_prefix=native
+    else
         sysroot_args="--sysroot=${KSYSROOT_SYSROOT}"
         common_args="-target ${KSYSROOT_FULL_TRIPLE} ${sysroot_args}"
         pkgconf_args="--personality=${KSYSROOT_PREFIX_ABS}/pkg-config.personality"
+        tool_prefix="${KSYSROOT_FULL_TRIPLE}"
     fi
 
     local clang_tools="cc c++ cpp"
     local llvm_tools="ar as nm objcopy objdump ranlib readelf size strings strip"
 
     # shellcheck disable=SC2086
-    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-pkg-config" "${PKG_CONFIG}" ${pkgconf_args}
+    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${tool_prefix}-pkg-config" "${PKG_CONFIG}" ${pkgconf_args}
     # shellcheck disable=SC2086
-    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-cc" "${LLVM_DIR}"/clang ${common_args} -fuse-ld="${LLD_DIR}/${KSYSROOT_LINKER}"
+    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${tool_prefix}-cc" "${LLVM_DIR}"/clang ${common_args} -fuse-ld="${LLD_DIR}/${KSYSROOT_LINKER}"
     # shellcheck disable=SC2086
-    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-c++" "${LLVM_DIR}"/clang++ ${common_args} ${KSYSROOT_CPP_QUIRK_ARGS} -fuse-ld="${LLD_DIR}/${KSYSROOT_LINKER}"
+    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${tool_prefix}-c++" "${LLVM_DIR}"/clang++ ${common_args} ${KSYSROOT_CPP_QUIRK_ARGS} -fuse-ld="${LLD_DIR}/${KSYSROOT_LINKER}"
     # shellcheck disable=SC2086
-    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-cpp" "${LLVM_DIR}"/clang-cpp ${common_args}
+    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${tool_prefix}-cpp" "${LLVM_DIR}"/clang-cpp ${common_args}
     # shellcheck disable=SC2086
-    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-ld" "${LLD_DIR}/${KSYSROOT_LINKER}" ${sysroot_args}
+    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${tool_prefix}-ld" "${LLD_DIR}/${KSYSROOT_LINKER}" ${sysroot_args}
 
-    for i in ${llvm_tools}; do
-        # shellcheck disable=SC2086
-        mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-$i" "${LLVM_DIR}"/llvm-"$i"
-    done
+    # for i in ${llvm_tools}; do
+    #     # shellcheck disable=SC2086
+    #     mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${tool_prefix}-$i" "${LLVM_DIR}"/llvm-"$i"
+    # done
 
-    if [ "${KSYSROOT_TRIPLE}" != "${KSYSROOT_FULL_TRIPLE}" ]; then
-        for i in pkg-config ${clang_tools} ld ${llvm_tools}; do
-            mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_TRIPLE}-$i" "${KSYSROOT_FULL_TRIPLE}-$i"
+    if [ "${KSYSROOT_TRIPLE}" != "${tool_prefix}" ]; then
+        for i in pkg-config ${clang_tools} ld; do
+            mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_TRIPLE}-$i" "${tool_prefix}-$i"
         done
     fi
+
+    emit_meta_env > "${KSYSROOT_PREFIX_ABS}"/bin/"${tool_prefix}"-env
+    chmod +x "${KSYSROOT_PREFIX_ABS}"/bin/"${tool_prefix}"-env
 }
 
 ### common code
@@ -342,8 +352,6 @@ ksysroot_prefix() {
 # $@ - pkg-config-paths
 ksysroot_emit() {
     mk_wrappers
-    emit_meta_env > "${KSYSROOT_PREFIX_ABS}"/bin/"${KSYSROOT_FULL_TRIPLE}"-env
-    chmod +x "${KSYSROOT_PREFIX_ABS}"/bin/"${KSYSROOT_FULL_TRIPLE}"-env
     emit_meta_llvm native  > "${KSYSROOT_PREFIX}"/native.txt
     if [ "${KSYSROOT_TRIPLE}" != "native" ]; then
         local libpath="$1"

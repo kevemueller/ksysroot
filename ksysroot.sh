@@ -19,7 +19,7 @@ if command -v brew >/dev/null; then
 : "${LLD_DIR:=$(brew --prefix lld)/bin}"
 : "${PKG_CONFIG:=$(brew --prefix pkgconf)/bin/pkg-config}"
 else
-: "${LLVM_DIR:=$(dirname "$(require_tool clang)")}"
+: "${LLVM_DIR:=$(dirname "$(realpath $(require_tool clang))")}"
 : "${LLD_DIR:=$(dirname "$(require_tool lld)")}"
 : "${PKG_CONFIG:=$(require_tool pkg-config)}"
 fi
@@ -71,7 +71,20 @@ ksysroot_test_pkgconf() {
     "${PKG_CONFIG}" --list-all
 }
 
+ksysroot_test_llvm() {
+    local ksysroot_dir="$1"
+    local env="${ksysroot_dir}/bin/*-env"
+
+    for i in CC CXX CPP LD CC_FOR_BUILD CXX_FOR_BUILD CPP_FOR_BUILD LD_FOR_BUILD AR AS NM OBJCOPY OBJDUMP RANLIB READELF SIZE STRINGS STRIP; do
+        local tool="$(${env} sh -c "echo \${$i}")"
+        echo "$i" is "${tool}" 
+        test -z "${CC}" || echo should not have leaked CC
+        ${tool} --version
+    done
+}
+
 ksysroot_test() {
+    ksysroot_test_llvm "$@"
     ksysroot_test_pkgconf "$@"
     ksysroot_test_meson "$@"
 }

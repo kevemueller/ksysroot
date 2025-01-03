@@ -80,6 +80,7 @@ jobs:
             pkgs:
               - build-essential
               - llvm
+              - clang
               - lld
               # - pkgconf comes preinstalled on the GitHub runner
               - meson

@@ -51,7 +51,7 @@ ksysroot_native_meta() {
     : "${MESON_ENDIAN:=little}"
 
     KSYSROOT_TRIPLE=native
-    KSYSROOT_FULL_TRIPLE="$("${LLVM_DIR}"/clang-cpp -print-target-triple)"
+    KSYSROOT_FULL_TRIPLE="$("${LLVM_DIR}"/clang -print-target-triple)"
     KSYSROOT_LINKER="${NATIVE_LINKER}"
 }
 
